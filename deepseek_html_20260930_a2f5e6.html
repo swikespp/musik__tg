@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Ghetto Blaster 2000</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Barrio&family=Sedgwick+Ave+Display&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Хедер -->
+    <header class="header">
+      <h1 class="logo">GHETTO<span>BLASTER</span></h1>
+      <p class="tagline">~ 2 0 0 0 ~</p>
+    </header>
+
+    <!-- Поиск -->
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="Искать трек или исполнителя..." />
+      <button id="searchBtn">НАЙТИ</button>
+    </div>
+
+    <!-- Добавить по ссылке -->
+    <div class="link-box">
+      <input type="text" id="linkInput" placeholder="Вставь ссылку SoundCloud..." />
+      <button id="addLinkBtn">ДОБАВИТЬ</button>
+    </div>
+
+    <!-- Результаты поиска -->
+    <div id="searchResults" class="search-results hidden"></div>
+
+    <!-- Плеер -->
+    <div class="player">
+      <div class="player-screen">
+        <div class="track-title" id="nowPlaying">— Ничего не играет —</div>
+        <div class="track-artist" id="nowArtist"></div>
+      </div>
+      <div class="player-controls">
+        <button id="playBtn" class="ctrl-btn">▶</button>
+        <button id="pauseBtn" class="ctrl-btn">⏸</button>
+        <button id="stopBtn" class="ctrl-btn">⏹</button>
+      </div>
+      <input type="range" id="seekBar" value="0" min="0" max="100" />
+      <div class="time-display">
+        <span id="currentTime">0:00</span>
+        <span id="duration">0:00</span>
+      </div>
+      <audio id="audio"></audio>
+    </div>
+
+    <!-- Плейлист -->
+    <div class="playlist-section">
+      <div class="playlist-header">
+        <h2>MY PLAYLIST</h2>
+        <button id="savePlaylistBtn" class="save-btn">СОХРАНИТЬ</button>
+      </div>
+      <ul id="playlist" class="playlist"></ul>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,244 @@
+const tg = window.Telegram.WebApp;
+tg.ready();
+tg.expand();
+
+const audio = document.getElementById('audio');
+const playBtn = document.getElementById('playBtn');
+const pauseBtn = document.getElementById('pauseBtn');
+const stopBtn = document.getElementById('stopBtn');
+const seekBar = document.getElementById('seekBar');
+const currentTimeEl = document.getElementById('currentTime');
+const durationEl = document.getElementById('duration');
+const nowPlaying = document.getElementById('nowPlaying');
+const nowArtist = document.getElementById('nowArtist');
+const searchInput = document.getElementById('searchInput');
+const searchBtn = document.getElementById('searchBtn');
+const searchResults = document.getElementById('searchResults');
+const linkInput = document.getElementById('linkInput');
+const addLinkBtn = document.getElementById('addLinkBtn');
+const playlistEl = document.getElementById('playlist');
+const savePlaylistBtn = document.getElementById('savePlaylistBtn');
+
+let playlist = [];
+let currentTrack = null;
+let soundcloudClientId = null;
+
+// === SoundCloud Client ID (динамическое извлечение) ===
+async function getSoundCloudClientId() {
+  if (soundcloudClientId) return soundcloudClientId;
+
+  try {
+    const res = await fetch('https://soundcloud.com');
+    const html = await res.text();
+    const match = html.match(/src="(https:\/\/a-v2\.sndcdn\.com\/assets\/[^"]+\.js)"/);
+    if (!match) throw new Error('Не удалось найти JS бандл SoundCloud');
+
+    const jsRes = await fetch(match[1]);
+    const js = await jsRes.text();
+    const clientIdMatch = js.match(/client_id:"([a-zA-Z0-9]+)"/);
+    if (!clientIdMatch) throw new Error('Не удалось извлечь client_id');
+
+    soundcloudClientId = clientIdMatch[1];
+    return soundcloudClientId;
+  } catch (e) {
+    console.error('SoundCloud Client ID error:', e);
+    tg.showAlert('Не удалось подключиться к SoundCloud. Попробуй позже.');
+    return null;
+  }
+}
+
+// === Поиск ===
+async function searchSoundCloud(query) {
+  const clientId = await getSoundCloudClientId();
+  if (!clientId) return [];
+
+  try {
+    const url = `https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(query)}&client_id=${clientId}&limit=15`;
+    const res = await fetch(url);
+    const data = await res.json();
+    return data.collection || [];
+  } catch (e) {
+    console.error('Search error:', e);
+    return [];
+  }
+}
+
+searchBtn.addEventListener('click', async () => {
+  const query = searchInput.value.trim();
+  if (!query) return;
+
+  searchBtn.textContent = '...';
+  searchBtn.disabled = true;
+
+  const results = await searchSoundCloud(query);
+
+  searchResults.innerHTML = '';
+  searchResults.classList.remove('hidden');
+
+  if (results.length === 0) {
+    searchResults.innerHTML = '<div class="search-result-item">Ничего не найдено</div>';
+  } else {
+    results.forEach(track => {
+      const div = document.createElement('div');
+      div.className = 'search-result-item';
+      div.innerHTML = `
+        <span>${escapeHtml(track.title)} — ${escapeHtml(track.user?.username || '')}</span>
+        <button class="add-result-btn">+</button>
+      `;
+      div.querySelector('.add-result-btn').addEventListener('click', () => {
+        addToPlaylist({
+          title: track.title,
+          artist: track.user?.username || 'Unknown',
+          streamUrl: track.stream_url + '?client_id=' + soundcloudClientId,
+          artwork: track.artwork_url,
+          source: 'soundcloud'
+        });
+      });
+      searchResults.appendChild(div);
+    });
+  }
+
+  searchBtn.textContent = 'НАЙТИ';
+  searchBtn.disabled = false;
+});
+
+// === Добавление по ссылке ===
+addLinkBtn.addEventListener('click', async () => {
+  const url = linkInput.value.trim();
+  if (!url) return;
+
+  const clientId = await getSoundCloudClientId();
+  if (!clientId) return;
+
+  try {
+    const resolveUrl = `https://api-v2.soundcloud.com/resolve?url=${encodeURIComponent(url)}&client_id=${clientId}`;
+    const res = await fetch(resolveUrl);
+    const track = await res.json();
+
+    if (track.kind === 'track') {
+      addToPlaylist({
+        title: track.title,
+        artist: track.user?.username || 'Unknown',
+        streamUrl: track.stream_url + '?client_id=' + clientId,
+        artwork: track.artwork_url,
+        source: 'soundcloud'
+      });
+      linkInput.value = '';
+    } else {
+      tg.showAlert('Это не трек. Вставь ссылку на конкретный трек SoundCloud.');
+    }
+  } catch (e) {
+    tg.showAlert('Не удалось распознать ссылку.');
+  }
+});
+
+// === Плейлист ===
+function addToPlaylist(track) {
+  playlist.push(track);
+  renderPlaylist();
+  tg.showAlert('Добавлено: ' + track.title);
+}
+
+function removeFromPlaylist(index) {
+  playlist.splice(index, 1);
+  renderPlaylist();
+}
+
+function renderPlaylist() {
+  playlistEl.innerHTML = '';
+  playlist.forEach((track, i) => {
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <span>${escapeHtml(track.title)} — ${escapeHtml(track.artist)}</span>
+      <button class="remove-btn" data-index="${i}">X</button>
+    `;
+    li.querySelector('span').addEventListener('click', () => playTrack(track));
+    li.querySelector('.remove-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      removeFromPlaylist(i);
+    });
+    playlistEl.appendChild(li);
+  });
+}
+
+// === Воспроизведение ===
+function playTrack(track) {
+  currentTrack = track;
+  audio.src = track.streamUrl;
+  audio.play().catch(e => {
+    console.error('Play error:', e);
+    tg.showAlert('Не удалось воспроизвести. Возможно, трек недоступен.');
+  });
+
+  nowPlaying.textContent = track.title;
+  nowArtist.textContent = track.artist;
+}
+
+playBtn.addEventListener('click', () => {
+  if (currentTrack) audio.play();
+});
+
+pauseBtn.addEventListener('click', () => {
+  audio.pause();
+});
+
+stopBtn.addEventListener('click', () => {
+  audio.pause();
+  audio.currentTime = 0;
+});
+
+// === Прогресс ===
+audio.addEventListener('timeupdate', () => {
+  if (audio.duration) {
+    seekBar.value = (audio.currentTime / audio.duration) * 100;
+    currentTimeEl.textContent = formatTime(audio.currentTime);
+  }
+});
+
+audio.addEventListener('loadedmetadata', () => {
+  durationEl.textContent = formatTime(audio.duration);
+});
+
+seekBar.addEventListener('input', () => {
+  if (audio.duration) {
+    audio.currentTime = (seekBar.value / 100) * audio.duration;
+  }
+});
+
+function formatTime(sec) {
+  if (!sec || isNaN(sec)) return '0:00';
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+// === Telegram CloudStorage ===
+savePlaylistBtn.addEventListener('click', () => {
+  const data = JSON.stringify(playlist);
+  tg.CloudStorage.setItem('playlist', data, (err) => {
+    if (err) {
+      tg.showAlert('Ошибка сохранения: ' + err);
+    } else {
+      tg.showAlert('Плейлист сохранён!');
+    }
+  });
+});
+
+// Загрузка при старте
+tg.CloudStorage.getItem('playlist', (err, value) => {
+  if (value) {
+    try {
+      playlist = JSON.parse(value);
+      renderPlaylist();
+    } catch (e) {
+      console.error('Load playlist error:', e);
+    }
+  }
+});
+
+// === Утилиты ===
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str || '';
+  return div.innerHTML;
+}
